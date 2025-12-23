@@ -12,9 +12,26 @@ from google import genai
 from google.genai import types
 
 
-def get_api_key_from_env_or_ui(ui_key: str) -> Optional[str]:
-    if ui_key and ui_key.strip():
-        return ui_key.strip()
+def load_dotenv_if_present(path: str = ".env") -> None:
+    if not os.path.isfile(path):
+        return
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                if key and key not in os.environ:
+                    os.environ[key] = value
+    except Exception:
+        return
+
+
+def get_api_key_from_env() -> Optional[str]:
+    load_dotenv_if_present()
     return os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
 
 
@@ -69,10 +86,19 @@ def generate_image_bytes(
     )
 
     for part in resp.parts:
-        if getattr(part, "inline_data", None):
-            img: Image.Image = part.as_image()
+        inline_data = getattr(part, "inline_data", None)
+        if inline_data is not None and getattr(inline_data, "data", None):
+            return inline_data.data
+        if hasattr(part, "as_image"):
+            img = part.as_image()
             buf = io.BytesIO()
-            img.save(buf, format="PNG")
+            if isinstance(img, Image.Image):
+                img.save(buf, "PNG")
+            else:
+                try:
+                    img.save(buf, "PNG")
+                except Exception as e:
+                    raise RuntimeError("Unsupported image object from model response.") from e
             return buf.getvalue()
 
     raise RuntimeError("Model response did not include an image.")

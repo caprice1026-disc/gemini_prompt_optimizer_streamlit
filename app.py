@@ -2,27 +2,8 @@ from __future__ import annotations
 
 from typing import Any, Dict, List
 
-import streamlit as st
-from google.genai import types
-
-from src.gemini_api import (
-    call_text_model_for_prompts,
-    generate_image_bytes,
-    get_api_key_from_env_or_ui,
-    get_client,
-)
 from src.models import PromptCandidate
-from src.prompts import (
-    build_round1_user_prompt,
-    build_round2_user_prompt,
-    build_round3_user_prompt,
-    build_system_instruction,
-    json_schema_for_final_prompt,
-    json_schema_for_prompts,
-)
 from src.runtime import is_running_with_streamlit
-from src.state import ensure_state, reset_all
-from src.ui_components import render_gallery, rank_ui, truncate
 
 
 def candidates_from_payload(payload: Dict[str, Any]) -> List[PromptCandidate]:
@@ -49,6 +30,25 @@ def final_candidate_from_payload(payload: Dict[str, Any]) -> PromptCandidate:
 
 
 def render_app() -> None:
+    import streamlit as st
+    from google.genai import types
+
+    from src.gemini_api import (
+        call_text_model_for_prompts,
+        generate_image_bytes,
+        get_api_key_from_env,
+        get_client,
+    )
+    from src.prompts import (
+        build_round1_user_prompt,
+        build_round2_user_prompt,
+        build_round3_user_prompt,
+        build_system_instruction,
+        json_schema_for_final_prompt,
+        json_schema_for_prompts,
+    )
+    from src.state import ensure_state, reset_all
+    from src.ui_components import render_gallery, rank_ui, truncate
     st.set_page_config(page_title="Gemini Prompt Optimizer", layout="wide")
     ensure_state()
 
@@ -57,8 +57,7 @@ def render_app() -> None:
 
     with st.sidebar:
         st.header("設定")
-        api_key_ui = st.text_input("Gemini API Key (GEMINI_API_KEY)", type="password")
-        api_key = get_api_key_from_env_or_ui(api_key_ui)
+        api_key = get_api_key_from_env()
 
         st.markdown("---")
         st.subheader("モデル")
@@ -110,10 +109,7 @@ def render_app() -> None:
             reset_all()
             st.rerun()
 
-        st.caption(
-            "APIキーは環境変数 GEMINI_API_KEY / GOOGLE_API_KEY でもOK。\n"
-            "Streamlit Cloudなら st.secrets で管理推奨。"
-        )
+        st.caption("APIキーは .env の GEMINI_API_KEY / GOOGLE_API_KEY から読み込みます。")
 
     st.header("① 作りたい画像のイメージ")
     st.session_state["user_intent"] = st.text_area(
@@ -145,7 +141,7 @@ def render_app() -> None:
         return
 
     if not api_key:
-        st.error("Gemini APIキーが見つかりません。サイドバーに入力するか、環境変数 GEMINI_API_KEY を設定してください。")
+        st.error("Gemini APIキーが .env から見つかりません。GEMINI_API_KEY を設定してください。")
         return
 
     client = get_client(api_key)
